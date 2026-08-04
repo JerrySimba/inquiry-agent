@@ -138,8 +138,8 @@ export function GmailConnectPanel({
     <div className="panel space-y-3 p-5">
       <h2 className="font-display text-2xl">Connect Gmail</h2>
       <p className="text-sm text-ink/60">
-        OAuth connects the operator inbox. Then sync pulls unread inquiry emails and auto-replies
-        when allowed.
+        OAuth connects the operator inbox. Unread mail is polled automatically every few minutes
+        (overnight included). Use Sync only for an immediate pull.
       </p>
       {connectedEmail ? (
         <p className="text-sm text-lagoon">Connected as {connectedEmail}</p>

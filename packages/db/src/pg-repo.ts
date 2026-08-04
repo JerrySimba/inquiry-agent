@@ -66,6 +66,14 @@ export const pgRepo = {
     return getDb().select().from(channelAccounts).where(eq(channelAccounts.orgId, orgId));
   },
 
+  async listConnectedGmailChannels() {
+    const rows = await getDb()
+      .select()
+      .from(channelAccounts)
+      .where(and(eq(channelAccounts.type, "email"), eq(channelAccounts.connected, true)));
+    return rows.filter((r) => (r.config as Record<string, string> | null)?.provider === "gmail");
+  },
+
   async getChannel(orgId: string, type: "whatsapp" | "email") {
     const [row] = await getDb()
       .select()

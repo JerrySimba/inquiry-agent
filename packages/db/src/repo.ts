@@ -80,6 +80,28 @@ export const localRepo = {
       );
   },
 
+  async listConnectedGmailChannels() {
+    return read()
+      .channel_accounts.filter(
+        (c) =>
+          c.type === "email" &&
+          c.connected &&
+          (c.config as Record<string, string> | undefined)?.provider === "gmail"
+      )
+      .map((r) =>
+        asDate({
+          id: String(r.id),
+          orgId: String(r.orgId),
+          type: "email" as const,
+          label: String(r.label),
+          externalId: (r.externalId as string | null) ?? null,
+          config: (r.config as Record<string, string>) ?? {},
+          connected: Boolean(r.connected),
+          createdAt: r.createdAt as Date | string,
+        })
+      );
+  },
+
   async getChannel(orgId: string, type: "whatsapp" | "email") {
     const row = read().channel_accounts.find((c) => c.orgId === orgId && c.type === type);
     if (!row) return null;
