@@ -1,0 +1,83 @@
+# Inquiry Agent
+
+Multi-tenant inquiry automation SaaS for travel / tour / ticketing operators.
+
+V1 auto-handles **pre-trip FAQs** end-to-end on WhatsApp and email. Other intents escalate with a context pack. Company knowledge is always scoped by `org_id`.
+
+## Stack
+
+- `apps/web` — Next.js dashboard + webhooks
+- `packages/db` — Postgres schema (pgvector) via Drizzle
+- `packages/agent` — router, FAQ agent, policy gate, digest
+- `packages/channels` — WhatsApp Cloud API + email adapters
+
+## Quick start
+
+```bash
+# 1) Install
+npm install
+
+# 2) Env
+cp .env.example .env
+
+# 3) Seed local pilot store (file-backed, no Docker required)
+npm run db:seed
+
+# 4) Run eval suite
+npm run eval
+
+# 5) Dev server
+npm run dev
+```
+
+**Default store is Neon Postgres** (`USE_LOCAL_STORE=false` + `DATABASE_URL`).
+
+```bash
+# After setting DATABASE_URL in .env / apps/web/.env
+npm run db:migrate
+npm run db:seed
+```
+
+Fallback local file store (no cloud DB): set `USE_LOCAL_STORE=true` and run `npm run db:seed -w @inquiry/db` with the local seeder.
+
+Open [http://localhost:3000](http://localhost:3000)
+
+**Pilot login:** `owner@sunset-tours.example` / `demo1234`
+
+## Product tour
+
+1. **Tours** — structured catalog (meeting point, what to bring, cancellation…)
+2. **Knowledge** — paste FAQs/policies into the company brain
+3. **Channels** — simulate WhatsApp/email inquiries; webhooks ready for Meta/Resend
+4. **Inbox** — auto-resolved vs escalated threads
+5. **Settings** — brand voice + per-intent autonomy toggles
+6. **Digest** — generate a morning overnight report
+
+## Webhooks
+
+- `GET/POST /api/webhooks/whatsapp` — Meta verification + inbound texts
+- `POST /api/webhooks/email` — header `x-email-secret`, JSON `{ from, to, subject, text }`
+
+Without `WHATSAPP_ACCESS_TOKEN` / `RESEND_API_KEY`, outbound sends run in demo mode (logged as success, no external call).
+
+## Autonomy policy (v1)
+
+- Auto-send for `pre_trip_faq`, `sales_lead`, and `availability` when autonomy is `auto`, confidence ≥ 0.72, and citations exist
+- New-client messages capture pax / dates / interests into **Leads**
+- Refunds, complaints, booking status → escalate
+
+## Connect WhatsApp + Gmail
+
+1. Open **Dashboard → Channels**
+2. **WhatsApp:** paste Phone number ID + access token from Meta; set the webhook callback to `/api/webhooks/whatsapp`
+3. **Gmail:** set `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET`, allow redirect `{APP_URL}/api/channels/gmail/callback`, then click **Connect Gmail**. Use **Sync unread now** to pull inbox inquiries.
+
+## Monorepo scripts
+
+| Script | Purpose |
+|---|---|
+| `npm run dev` | Next.js app |
+| `npm run db:migrate` | Apply SQL schema + pgvector |
+| `npm run db:seed` | Sunset Tours Bali pilot data |
+| `npm run eval` | FAQ routing/policy regression checks |
+| `npm run build` | Build packages + web |

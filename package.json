@@ -1,0 +1,20 @@
+{
+  "name": "inquiry-agent",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @inquiry/web",
+    "build": "npm run build -w @inquiry/db && npm run build -w @inquiry/agent && npm run build -w @inquiry/channels && npm run build -w @inquiry/web",
+    "db:generate": "npm run generate -w @inquiry/db",
+    "db:migrate": "npm run migrate -w @inquiry/db",
+    "db:seed": "npm run seed -w @inquiry/db",
+    "eval": "npm run eval -w @inquiry/agent",
+    "lint": "npm run lint -w @inquiry/web"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

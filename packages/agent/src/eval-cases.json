@@ -1,0 +1,41 @@
+{
+  "pilotOperator": "Sunset Tours Bali",
+  "cases": [
+    {
+      "name": "uluwatu_meeting_point",
+      "message": "Hi, where is the meeting point for the Uluwatu sunset tour?",
+      "expectIntent": "pre_trip_faq",
+      "expectAuto": true
+    },
+    {
+      "name": "uluwatu_what_to_bring",
+      "message": "What should I bring for Uluwatu Kecak tomorrow?",
+      "expectIntent": "pre_trip_faq",
+      "expectAuto": true
+    },
+    {
+      "name": "uluwatu_cancellation",
+      "message": "What is your cancellation policy for the Uluwatu tour?",
+      "expectIntent": "pre_trip_faq",
+      "expectAuto": true
+    },
+    {
+      "name": "refund_request",
+      "message": "I need a full refund for my booking right now",
+      "expectIntent": "refund",
+      "expectAuto": false
+    },
+    {
+      "name": "complaint",
+      "message": "This is unacceptable, I want to speak to a manager",
+      "expectIntent": "complaint",
+      "expectAuto": false
+    },
+    {
+      "name": "booking_status",
+      "message": "Did my payment go through? Booking confirmation still missing",
+      "expectIntent": "booking_status",
+      "expectAuto": false
+    }
+  ]
+}
