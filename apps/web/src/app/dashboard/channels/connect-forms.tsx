@@ -99,21 +99,27 @@ export function WhatsAppConnectForm({
 export function GmailConnectPanel({
   connectedEmail,
   gmailConfigured,
+  appUrl,
 }: {
   connectedEmail?: string;
   gmailConfigured: boolean;
+  appUrl: string;
 }) {
   const params = useSearchParams();
   const router = useRouter();
+  const redirectUri = `${appUrl.replace(/\/$/, "")}/api/channels/gmail/callback`;
+  const isLocal = appUrl.includes("localhost");
   const banner = useMemo(() => {
     const g = params.get("gmail");
     if (g === "connected") return "Gmail connected.";
-    if (g === "error") return "Gmail connection failed. Check Google OAuth credentials.";
+    if (g === "error") return "Gmail connection failed. Check Google OAuth credentials and redirect URI.";
     if (g === "missing_env") {
-      return "Google OAuth is not configured yet. Add credentials to apps/web/.env and restart the server.";
+      return isLocal
+        ? "Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to apps/web/.env, then restart the server."
+        : "Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in Vercel → Settings → Environment Variables, then Redeploy.";
     }
     return null;
-  }, [params]);
+  }, [params, isLocal]);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
 
   async function sync() {
@@ -157,25 +163,36 @@ export function GmailConnectPanel({
           <li>Enable the Gmail API for that project</li>
           <li>
             Add redirect URI:{" "}
-            <code className="rounded bg-mist/70 px-1">
-              http://localhost:3000/api/channels/gmail/callback
-            </code>
+            <code className="rounded bg-mist/70 px-1 break-all">{redirectUri}</code>
           </li>
           <li>
-            Put <code>GOOGLE_CLIENT_ID</code> and <code>GOOGLE_CLIENT_SECRET</code> in{" "}
-            <code>apps/web/.env</code>
+            {isLocal ? (
+              <>
+                Put <code>GOOGLE_CLIENT_ID</code> and <code>GOOGLE_CLIENT_SECRET</code> in{" "}
+                <code>apps/web/.env</code>, then restart <code>npm run dev</code>
+              </>
+            ) : (
+              <>
+                In <strong>Vercel → Settings → Environment Variables</strong>, add{" "}
+                <code>GOOGLE_CLIENT_ID</code>, <code>GOOGLE_CLIENT_SECRET</code>, and{" "}
+                <code>NEXT_PUBLIC_APP_URL={appUrl.replace(/\/$/, "")}</code>, then{" "}
+                <strong>Redeploy</strong>
+              </>
+            )}
           </li>
-          <li>Restart <code>npm run dev</code>, then click Connect Gmail</li>
+          <li>Return here and click Connect Gmail</li>
         </ol>
       )}
       <div className="flex flex-wrap gap-3">
-        <a
-          className={`btn-primary ${!gmailConfigured ? "pointer-events-none opacity-50" : ""}`}
-          href={gmailConfigured ? "/api/channels/gmail/start" : undefined}
-          aria-disabled={!gmailConfigured}
-        >
-          {connectedEmail ? "Reconnect Gmail" : "Connect Gmail"}
-        </a>
+        {gmailConfigured ? (
+          <a className="btn-primary" href="/api/channels/gmail/start">
+            {connectedEmail ? "Reconnect Gmail" : "Connect Gmail"}
+          </a>
+        ) : (
+          <button className="btn-primary opacity-50" type="button" disabled>
+            Connect Gmail (env missing)
+          </button>
+        )}
         <button className="btn-secondary" type="button" onClick={sync} disabled={!connectedEmail}>
           Sync unread now
         </button>

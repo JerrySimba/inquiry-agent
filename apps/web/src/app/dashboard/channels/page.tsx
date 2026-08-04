@@ -51,6 +51,10 @@ export default async function ChannelsPage() {
               process.env.GOOGLE_CLIENT_ID?.trim() &&
                 process.env.GOOGLE_CLIENT_SECRET?.trim()
             )}
+            appUrl={
+              process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
+              "https://inquiry-agent-web-phi.vercel.app"
+            }
           />
         </Suspense>
       </div>
