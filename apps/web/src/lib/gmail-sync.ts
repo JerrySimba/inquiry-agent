@@ -4,7 +4,7 @@ import {
   listUnreadInquiryEmails,
   markGmailRead,
   refreshGmailAccessToken,
-  sendGmailReply,
+  watchGmailInbox,
 } from "@inquiry/channels";
 import { repo } from "@inquiry/db";
 
@@ -41,8 +41,50 @@ async function getFreshGmailAccess(orgId: string) {
   return { channel, accessToken, config };
 }
 
-export async function syncGmailForOrg(orgId: string, maxMessages = 20) {
+export async function startGmailPushWatch(orgId: string) {
+  const topic = process.env.GMAIL_PUBSUB_TOPIC?.trim();
+  if (!topic) {
+    return { ok: false as const, reason: "GMAIL_PUBSUB_TOPIC not set" };
+  }
+
   const { channel, accessToken, config } = await getFreshGmailAccess(orgId);
+  const watch = await watchGmailInbox(accessToken, topic);
+  await repo.updateChannel(channel.id, {
+    config: {
+      ...config,
+      accessToken,
+      watchHistoryId: watch.historyId,
+      watchExpiration: watch.expiration,
+      pushEnabled: "true",
+    },
+  });
+  return { ok: true as const, ...watch };
+}
+
+export async function renewAllGmailPushWatches() {
+  const topic = process.env.GMAIL_PUBSUB_TOPIC?.trim();
+  if (!topic) return [];
+
+  const channels = await repo.listConnectedGmailChannels();
+  const out = [];
+  for (const channel of channels) {
+    try {
+      const result = await startGmailPushWatch(String(channel.orgId));
+      out.push({ orgId: String(channel.orgId), email: channel.externalId, ...result });
+    } catch (err) {
+      out.push({
+        orgId: String(channel.orgId),
+        email: channel.externalId,
+        ok: false as const,
+        reason: err instanceof Error ? err.message : "watch failed",
+      });
+    }
+  }
+  return out;
+}
+
+export async function syncGmailForOrg(orgId: string, maxMessages = 20) {
+  const { channel, accessToken } = await getFreshGmailAccess(orgId);
   const messages = await listUnreadInquiryEmails(accessToken, maxMessages);
   const results = [];
 
@@ -61,29 +103,25 @@ export async function syncGmailForOrg(orgId: string, maxMessages = 20) {
       externalMessageId: msg.id,
     });
 
-    // Auto-reply may already be sent inside ingestInbound via dispatchOutbound.
-    // Send again only if ingest did not (demo/outage) — skip duplicate when provider gmail
-    // already handled in dispatchOutbound.
-    if (
-      ingested.result.action === "auto_reply" &&
-      ingested.result.reply &&
-      !(channel.config as Record<string, string>)?.provider
-    ) {
-      await sendGmailReply({
-        accessToken,
-        from: config.email,
-        to: from,
-        subject: msg.subject,
-        text: ingested.result.reply,
-        threadId: msg.threadId,
-      });
-    }
-
     await markGmailRead(accessToken, msg.id);
     results.push(ingested.result);
   }
 
   return { orgId, processed: results.length, results };
+}
+
+export async function syncGmailByEmailAddress(emailAddress: string) {
+  const channel = await repo.getChannelByExternal("email", emailAddress.toLowerCase());
+  if (!channel) {
+    // try case-sensitive match against connected gmail channels
+    const all = await repo.listConnectedGmailChannels();
+    const match = all.find(
+      (c) => String(c.externalId || "").toLowerCase() === emailAddress.toLowerCase()
+    );
+    if (!match) throw new Error(`No Gmail channel for ${emailAddress}`);
+    return syncGmailForOrg(String(match.orgId));
+  }
+  return syncGmailForOrg(String(channel.orgId));
 }
 
 export async function syncAllConnectedGmailInboxes() {

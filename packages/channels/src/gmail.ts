@@ -201,3 +201,32 @@ export async function markGmailRead(accessToken: string, messageId: string) {
     body: JSON.stringify({ removeLabelIds: ["UNREAD"] }),
   });
 }
+
+/** Start Gmail push notifications to a Cloud Pub/Sub topic (near real-time). */
+export async function watchGmailInbox(accessToken: string, topicName: string) {
+  const data = (await gmailFetch(accessToken, "users/me/watch", {
+    method: "POST",
+    body: JSON.stringify({
+      topicName,
+      labelIds: ["INBOX"],
+      labelFilterBehavior: "include",
+    }),
+  })) as { historyId?: string; expiration?: string };
+
+  return {
+    historyId: data.historyId ?? "",
+    expiration: data.expiration ?? "",
+  };
+}
+
+export function parseGmailPushData(dataB64: string): {
+  emailAddress?: string;
+  historyId?: string;
+} {
+  try {
+    const json = Buffer.from(dataB64, "base64").toString("utf8");
+    return JSON.parse(json) as { emailAddress?: string; historyId?: string };
+  } catch {
+    return {};
+  }
+}
