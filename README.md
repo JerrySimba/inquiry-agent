@@ -19,8 +19,10 @@ npm install
 
 # 2) Env
 cp .env.example .env
+# Set DATABASE_URL (Neon pooled) and AUTH_SECRET
 
-# 3) Seed local pilot store (file-backed, no Docker required)
+# 3) Migrate + seed Neon
+npm run db:migrate
 npm run db:seed
 
 # 4) Run eval suite
@@ -32,13 +34,28 @@ npm run dev
 
 **Default store is Neon Postgres** (`USE_LOCAL_STORE=false` + `DATABASE_URL`).
 
-```bash
-# After setting DATABASE_URL in .env / apps/web/.env
-npm run db:migrate
-npm run db:seed
-```
+Fallback local file store: set `USE_LOCAL_STORE=true`.
 
-Fallback local file store (no cloud DB): set `USE_LOCAL_STORE=true` and run `npm run db:seed -w @inquiry/db` with the local seeder.
+## Deploy on Vercel
+
+1. Import [JerrySimba/inquiry-agent](https://github.com/JerrySimba/inquiry-agent) in Vercel
+2. Set **Root Directory** to `apps/web` (Framework: Next.js)
+3. Add environment variables (Production + Preview):
+
+| Variable | Notes |
+|---|---|
+| `DATABASE_URL` | Neon **pooled** URL (`?sslmode=require`) |
+| `AUTH_SECRET` | Long random string |
+| `NEXT_PUBLIC_APP_URL` | `https://YOUR-APP.vercel.app` |
+| `USE_LOCAL_STORE` | `false` |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | For Gmail |
+| `WHATSAPP_*` | Optional; can also connect in dashboard |
+
+4. Deploy
+5. In Google OAuth, add redirect URI: `https://YOUR-APP.vercel.app/api/channels/gmail/callback`
+6. In Meta WhatsApp, set webhook to: `https://YOUR-APP.vercel.app/api/webhooks/whatsapp`
+
+`apps/web/vercel.json` already runs install/build from the monorepo root.
 
 Open [http://localhost:3000](http://localhost:3000)
 

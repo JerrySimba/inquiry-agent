@@ -23,7 +23,15 @@ export function getSql(connectionString?: string) {
   const url = normalizeDatabaseUrl(connectionString ?? process.env.DATABASE_URL ?? "");
   if (!url) throw new Error("DATABASE_URL is not set");
   if (sqlCached) return sqlCached;
-  sqlCached = postgres(url, { max: 10, prepare: false });
+
+  // Serverless / Vercel: keep pool tiny; use Neon's pooler URL in DATABASE_URL
+  const max = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME ? 1 : 10;
+  sqlCached = postgres(url, {
+    max,
+    prepare: false,
+    idle_timeout: 20,
+    connect_timeout: 10,
+  });
   return sqlCached;
 }
 

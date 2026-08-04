@@ -1,1 +1,1 @@
-export default [];
+export default [{ ignores: [".next/**", "node_modules/**"] }];

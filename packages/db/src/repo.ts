@@ -33,25 +33,25 @@ function write(data: LocalData) {
   saveLocalData(data);
 }
 
-function asDate<T extends Record<string, unknown>>(row: T): T {
-  const out = { ...row };
+function asDate<T>(row: unknown): T {
+  const out = { ...(row as Record<string, unknown>) };
   for (const key of Object.keys(out)) {
     if (key.endsWith("At") || key.endsWith("Start") || key.endsWith("End")) {
       const v = out[key];
-      if (typeof v === "string") (out as Record<string, unknown>)[key] = new Date(v);
+      if (typeof v === "string") out[key] = new Date(v);
     }
   }
-  return out;
+  return out as T;
 }
 
 export const localRepo = {
   async getOrg(orgId: string) {
-    return asDate(read().organizations.find((o) => o.id === orgId) as Organization);
+    return asDate<Organization>(read().organizations.find((o) => o.id === orgId));
   },
 
   async getOrgBySlug(slug: string) {
     const row = read().organizations.find((o) => o.slug === slug);
-    return row ? asDate(row as Organization) : null;
+    return row ? asDate<Organization>(row) : null;
   },
 
   async getUserByEmail(email: string) {
@@ -64,24 +64,67 @@ export const localRepo = {
   },
 
   async listChannels(orgId: string) {
-    return read().channel_accounts.filter((c) => c.orgId === orgId).map((r) => asDate(r as never));
+    return read()
+      .channel_accounts.filter((c) => c.orgId === orgId)
+      .map((r) =>
+        asDate({
+          id: String(r.id),
+          orgId: String(r.orgId),
+          type: r.type as "whatsapp" | "email",
+          label: String(r.label),
+          externalId: (r.externalId as string | null) ?? null,
+          config: (r.config as Record<string, string>) ?? {},
+          connected: Boolean(r.connected),
+          createdAt: r.createdAt as Date | string,
+        })
+      );
   },
 
   async getChannel(orgId: string, type: "whatsapp" | "email") {
     const row = read().channel_accounts.find((c) => c.orgId === orgId && c.type === type);
-    return row ? asDate(row as never) : null;
+    if (!row) return null;
+    return asDate({
+      id: String(row.id),
+      orgId: String(row.orgId),
+      type: row.type as "whatsapp" | "email",
+      label: String(row.label),
+      externalId: (row.externalId as string | null) ?? null,
+      config: (row.config as Record<string, string>) ?? {},
+      connected: Boolean(row.connected),
+      createdAt: row.createdAt as Date | string,
+    });
   },
 
   async getChannelById(id: string) {
     const row = read().channel_accounts.find((c) => c.id === id);
-    return row ? asDate(row as never) : null;
+    if (!row) return null;
+    return asDate<{
+      id: string;
+      orgId: string;
+      type: "whatsapp" | "email";
+      label: string;
+      externalId: string | null;
+      config: Record<string, string>;
+      connected: boolean;
+      createdAt: Date | string;
+    }>({
+      id: String(row.id),
+      orgId: String(row.orgId),
+      type: row.type as "whatsapp" | "email",
+      label: String(row.label),
+      externalId: (row.externalId as string | null) ?? null,
+      config: (row.config as Record<string, string>) ?? {},
+      connected: Boolean(row.connected),
+      createdAt: row.createdAt as Date | string,
+    });
   },
 
   async getChannelByExternal(type: "whatsapp" | "email", externalId: string) {
     const row = read().channel_accounts.find(
       (c) => c.type === type && c.externalId === externalId
     );
-    return row ? asDate(row as never) : null;
+    if (!row) return null;
+    return this.getChannel(String(row.orgId), type);
   },
 
   async updateChannel(
@@ -103,7 +146,17 @@ export const localRepo = {
       config: { ...((prev.config as Record<string, string>) ?? {}), ...(patch.config ?? {}) },
     };
     write(data);
-    return asDate(data.channel_accounts[idx] as never);
+    const row = data.channel_accounts[idx];
+    return asDate({
+      id: String(row.id),
+      orgId: String(row.orgId),
+      type: row.type as "whatsapp" | "email",
+      label: String(row.label),
+      externalId: (row.externalId as string | null) ?? null,
+      config: (row.config as Record<string, string>) ?? {},
+      connected: Boolean(row.connected),
+      createdAt: row.createdAt as Date | string,
+    });
   },
 
   async createLead(input: {
@@ -194,12 +247,12 @@ export const localRepo = {
   async listTours(orgId: string) {
     return read()
       .tours_products.filter((t) => t.orgId === orgId)
-      .map((r) => asDate(r as TourProduct));
+      .map((r) => asDate<TourProduct>(r));
   },
 
   async getTour(tourId: string) {
     const row = read().tours_products.find((t) => t.id === tourId);
-    return row ? asDate(row as TourProduct) : null;
+    return row ? asDate<TourProduct>(row) : null;
   },
 
   async createTour(input: Omit<TourProduct, "id" | "createdAt" | "updatedAt" | "active"> & { active?: boolean }) {
@@ -214,20 +267,20 @@ export const localRepo = {
     };
     data.tours_products.push(tour);
     write(data);
-    return asDate(tour as TourProduct);
+    return asDate<TourProduct>(tour);
   },
 
   async listKnowledgeSources(orgId: string) {
     return read()
       .knowledge_sources.filter((k) => k.orgId === orgId)
       .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
-      .map((r) => asDate(r as KnowledgeSource));
+      .map((r) => asDate<KnowledgeSource>(r));
   },
 
   async listKnowledgeChunks(orgId: string) {
     return read()
       .knowledge_chunks.filter((k) => k.orgId === orgId)
-      .map((r) => asDate(r as KnowledgeChunk));
+      .map((r) => asDate<KnowledgeChunk>(r));
   },
 
   async createKnowledgeSource(input: {
@@ -249,7 +302,7 @@ export const localRepo = {
     };
     data.knowledge_sources.push(source);
     write(data);
-    return asDate(source as KnowledgeSource);
+    return asDate<KnowledgeSource>(source);
   },
 
   async createKnowledgeChunk(input: {
@@ -271,7 +324,7 @@ export const localRepo = {
     };
     data.knowledge_chunks.push(chunk);
     write(data);
-    return asDate(chunk as KnowledgeChunk);
+    return asDate<KnowledgeChunk>(chunk);
   },
 
   async findConversation(orgId: string, channel: "whatsapp" | "email", threadId: string) {
@@ -279,7 +332,7 @@ export const localRepo = {
       (c) =>
         c.orgId === orgId && c.channel === channel && c.externalThreadId === threadId
     );
-    return row ? asDate(row as Conversation) : null;
+    return row ? asDate<Conversation>(row) : null;
   },
 
   async createConversation(input: Partial<Conversation> & {
@@ -298,7 +351,7 @@ export const localRepo = {
     };
     data.conversations.push(row);
     write(data);
-    return asDate(row as Conversation);
+    return asDate<Conversation>(row);
   },
 
   async touchConversation(
@@ -320,12 +373,12 @@ export const localRepo = {
     return read()
       .conversations.filter((c) => c.orgId === orgId)
       .sort((a, b) => String(b.lastMessageAt).localeCompare(String(a.lastMessageAt)))
-      .map((r) => asDate(r as Conversation));
+      .map((r) => asDate<Conversation>(r));
   },
 
   async getConversation(id: string) {
     const row = read().conversations.find((c) => c.id === id);
-    return row ? asDate(row as Conversation) : null;
+    return row ? asDate<Conversation>(row) : null;
   },
 
   async createMessage(input: {
@@ -346,14 +399,14 @@ export const localRepo = {
     };
     data.messages.push(row);
     write(data);
-    return asDate(row as Message);
+    return asDate<Message>(row);
   },
 
   async listMessages(conversationId: string) {
     return read()
       .messages.filter((m) => m.conversationId === conversationId)
       .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))
-      .map((r) => asDate(r as Message));
+      .map((r) => asDate<Message>(r));
   },
 
   async createInquiry(input: {
@@ -374,7 +427,7 @@ export const localRepo = {
     };
     data.inquiries.push(row);
     write(data);
-    return asDate(row as Inquiry);
+    return asDate<Inquiry>(row);
   },
 
   async updateInquiry(
@@ -396,7 +449,7 @@ export const localRepo = {
     return read()
       .inquiries.filter((i) => i.orgId === orgId)
       .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
-      .map((r) => asDate(r as Inquiry));
+      .map((r) => asDate<Inquiry>(r));
   },
 
   async createAgentRun(input: {
@@ -420,14 +473,14 @@ export const localRepo = {
     };
     data.agent_runs.push(row);
     write(data);
-    return asDate(row as AgentRun);
+    return asDate<AgentRun>(row);
   },
 
   async listAgentRuns(orgId: string) {
     return read()
       .agent_runs.filter((r) => r.orgId === orgId)
       .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
-      .map((r) => asDate(r as AgentRun));
+      .map((r) => asDate<AgentRun>(r));
   },
 
   async createEscalation(input: {
@@ -447,14 +500,14 @@ export const localRepo = {
     };
     data.escalations.push(row);
     write(data);
-    return asDate(row as Escalation);
+    return asDate<Escalation>(row);
   },
 
   async listEscalations(orgId: string, onlyOpen = false) {
     return read()
       .escalations.filter((e) => e.orgId === orgId && (!onlyOpen || !e.resolved))
       .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
-      .map((r) => asDate(r as Escalation));
+      .map((r) => asDate<Escalation>(r));
   },
 
   async createDigest(input: {
