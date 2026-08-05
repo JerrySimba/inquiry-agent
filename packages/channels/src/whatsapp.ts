@@ -18,26 +18,61 @@ export function verifyWhatsAppChallenge(input: {
   return null;
 }
 
+type WhatsAppChangeValue = {
+  messages?: WhatsAppWebhookMessage[];
+  metadata?: { phone_number_id?: string };
+};
+
+function collectTextMessages(value?: WhatsAppChangeValue): WhatsAppWebhookMessage[] {
+  const out: WhatsAppWebhookMessage[] = [];
+  for (const msg of value?.messages ?? []) {
+    if (msg.type === "text" && msg.text?.body) out.push(msg);
+  }
+  return out;
+}
+
+/** Normal Meta delivery uses entry[].changes[]; dashboard "Send to My Server" may send { field, value }. */
 export function extractWhatsAppTexts(payload: unknown): WhatsAppWebhookMessage[] {
   const body = payload as {
     entry?: Array<{
       changes?: Array<{
-        value?: {
-          messages?: WhatsAppWebhookMessage[];
-        };
+        value?: WhatsAppChangeValue;
       }>;
     }>;
+    value?: WhatsAppChangeValue;
+    field?: string;
   };
 
   const out: WhatsAppWebhookMessage[] = [];
   for (const entry of body.entry ?? []) {
     for (const change of entry.changes ?? []) {
-      for (const msg of change.value?.messages ?? []) {
-        if (msg.type === "text" && msg.text?.body) out.push(msg);
-      }
+      out.push(...collectTextMessages(change.value));
     }
   }
+
+  // Meta webhook field tester payload (unwrapped change object)
+  if (!out.length && body.value?.messages) {
+    out.push(...collectTextMessages(body.value));
+  }
+
   return out;
+}
+
+export function extractWhatsAppPhoneNumberId(payload: unknown): string | null {
+  const body = payload as {
+    entry?: Array<{
+      changes?: Array<{
+        value?: WhatsAppChangeValue;
+      }>;
+    }>;
+    value?: WhatsAppChangeValue;
+  };
+
+  return (
+    body.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id ??
+    body.value?.metadata?.phone_number_id ??
+    null
+  );
 }
 
 export async function sendWhatsAppText(input: {

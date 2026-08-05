@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  extractWhatsAppPhoneNumberId,
   extractWhatsAppTexts,
   ingestInbound,
   verifyWhatsAppChallenge,
@@ -29,14 +30,7 @@ export async function POST(req: Request) {
 
   await seedLocalStore();
 
-  const phoneNumberId =
-    (
-      payload as {
-        entry?: Array<{
-          changes?: Array<{ value?: { metadata?: { phone_number_id?: string } } }>;
-        }>;
-      }
-    ).entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id ?? null;
+  const phoneNumberId = extractWhatsAppPhoneNumberId(payload);
 
   const orgIdHeader = req.headers.get("x-org-id");
   let account = null as Awaited<ReturnType<typeof repo.getChannel>> | null;
