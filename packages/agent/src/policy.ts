@@ -9,7 +9,8 @@ export type PolicyDecision = {
   confidence: number;
 };
 
-const AUTO_CONFIDENCE_THRESHOLD = 0.72;
+/** Low enough for grounded sales/FAQ drafts to auto-send in live chat. */
+const AUTO_CONFIDENCE_THRESHOLD = 0.55;
 const MIN_CITATIONS = 1;
 
 const AUTO_ELIGIBLE: Intent[] = ["pre_trip_faq", "sales_lead", "availability"];

@@ -48,8 +48,13 @@ export async function ingestInbound(inbound: NormalizedInbound) {
     messageBody: inbound.body,
   });
 
-  if (result.action === "auto_reply" && result.reply) {
-    await dispatchOutbound({
+  let outbound:
+    | { ok: boolean; id?: string; error?: string }
+    | undefined;
+
+  // Send a reply for both auto-handled and escalated chats so WhatsApp stays conversational.
+  if (result.reply) {
+    outbound = await dispatchOutbound({
       orgId: inbound.orgId,
       channel: inbound.channel,
       to: inbound.customerHandle,
@@ -62,7 +67,7 @@ export async function ingestInbound(inbound: NormalizedInbound) {
     });
   }
 
-  return { conversation, inboundMessage, result };
+  return { conversation, inboundMessage, result, outbound };
 }
 
 export async function dispatchOutbound(input: {
@@ -92,6 +97,7 @@ export async function dispatchOutbound(input: {
         "",
       to: input.to,
       body: input.body,
+      allowDemo: config.mode === "demo",
     });
   }
 

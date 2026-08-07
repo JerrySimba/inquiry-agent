@@ -117,7 +117,8 @@ export function draftPreTripFaqReply(input: {
 export async function polishReplyWithLlm(
   draft: string,
   brandVoice: string | null | undefined,
-  message: string
+  message: string,
+  historyText?: string
 ): Promise<string> {
   const key = process.env.OPENAI_API_KEY;
   if (!key) return draft;
@@ -137,11 +138,15 @@ export async function polishReplyWithLlm(
             role: "system",
             content: `Rewrite the draft reply for a travel company WhatsApp/email agent.
 Brand voice: ${brandVoice ?? "friendly and clear"}
-Rules: Do not invent facts. Keep all concrete details (places, times, policies). Keep under 180 words. No markdown headings.`,
+Rules:
+- Do not invent facts. Keep all concrete details (places, times, policies).
+- Keep under 180 words.
+- No markdown headings or **bold**.
+- Sound like an ongoing chat: acknowledge follow-ups, ask at most one clear next question.`,
           },
           {
             role: "user",
-            content: `Customer message:\n${message}\n\nDraft:\n${draft}`,
+            content: `${historyText ? `Recent conversation:\n${historyText}\n\n` : ""}Latest customer message:\n${message}\n\nDraft:\n${draft}`,
           },
         ],
       }),

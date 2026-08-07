@@ -52,7 +52,7 @@ export async function POST(req: Request) {
 
   const results = [];
   for (const msg of texts) {
-    const result = await ingestInbound({
+    const ingested = await ingestInbound({
       orgId: account.orgId,
       channel: "whatsapp",
       channelAccountId: account.id,
@@ -61,7 +61,10 @@ export async function POST(req: Request) {
       body: msg.text?.body ?? "",
       externalMessageId: msg.id,
     });
-    results.push(result.result);
+    results.push({
+      ...ingested.result,
+      outbound: ingested.outbound,
+    });
   }
 
   return NextResponse.json({ ok: true, processed: results.length, results });

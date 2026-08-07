@@ -23,11 +23,73 @@ export type PipelineResult = {
   lead?: Record<string, unknown>;
 };
 
+const AUTO_INTENTS: Intent[] = ["pre_trip_faq", "sales_lead", "availability"];
+
+function isShortFollowUp(message: string): boolean {
+  const t = message.trim();
+  if (t.length === 0 || t.length > 100) return false;
+  return /^(yes|yeah|yep|ok|okay|sure|please|thanks|thank you|hi|hello|hey)\b/i.test(t)
+    || /^\d+\s*(adults?|kids?|children|people|pax|guests?)?\s*$/i.test(t)
+    || /^(we\s+are\s+)?\d+(\s+people)?$/i.test(t)
+    || /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|january|february|march|april|june|july|august|september|october|november|december)\b/i.test(
+      t
+    )
+    || /^\d{1,2}[\/\-]\d{1,2}/.test(t);
+}
+
+function priorIntentFromMessages(
+  messages: Array<{ sender: string; metadata: unknown }>
+): Intent | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg.sender !== "agent") continue;
+    const intent = (msg.metadata as { intent?: Intent } | null)?.intent;
+    if (intent && AUTO_INTENTS.includes(intent)) return intent;
+  }
+  return null;
+}
+
 export async function processInquiry(input: PipelineInput): Promise<PipelineResult> {
   const org = await repo.getOrg(input.orgId);
   if (!org) throw new Error(`Organization not found: ${input.orgId}`);
 
-  const route = await routeIntentWithLlm(input.messageBody);
+  const history = await repo.listMessages(input.conversationId);
+  const priorIntent = priorIntentFromMessages(history);
+  const contextQuery = [
+    ...history
+      .filter((m) => m.direction === "inbound")
+      .slice(-4)
+      .map((m) => m.body),
+    input.messageBody,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  let route = await routeIntentWithLlm(input.messageBody);
+
+  if (
+    (route.intent === "other" || isShortFollowUp(input.messageBody)) &&
+    priorIntent
+  ) {
+    route = {
+      intent: priorIntent,
+      confidence: Math.max(route.confidence, 0.7),
+      reasoning: `Continued conversation as ${priorIntent}`,
+    };
+  }
+
+  const [chunks, tours] = await Promise.all([
+    retrieveKnowledge(input.orgId, contextQuery),
+    findRelevantTours(input.orgId, contextQuery),
+  ]);
+
+  if (route.intent === "other" && tours.length > 0) {
+    route = {
+      intent: "sales_lead",
+      confidence: Math.max(route.confidence, 0.65),
+      reasoning: "General inquiry with matching tours treated as sales lead",
+    };
+  }
 
   const inquiry = await repo.createInquiry({
     orgId: input.orgId,
@@ -41,32 +103,42 @@ export async function processInquiry(input: PipelineInput): Promise<PipelineResu
   const autonomy = await repo.getAutonomy(input.orgId, route.intent);
   const autonomyMode = (autonomy?.mode as "auto" | "escalate" | undefined) ?? "escalate";
 
-  const [chunks, tours] = await Promise.all([
-    retrieveKnowledge(input.orgId, input.messageBody),
-    findRelevantTours(input.orgId, input.messageBody),
-  ]);
-
   let draft = null as
     | (ReturnType<typeof draftPreTripFaqReply> & { lead?: Record<string, unknown> })
     | null;
   let lead: Record<string, unknown> | undefined;
 
+  const historyText = history
+    .slice(-10)
+    .map((m) => `${m.direction === "inbound" ? "Customer" : "Agent"}: ${m.body}`)
+    .join("\n");
+
   if (route.intent === "pre_trip_faq") {
     draft = draftPreTripFaqReply({
-      message: input.messageBody,
+      message: contextQuery,
       brandVoice: org.brandVoice,
       tours,
       chunks,
     });
-    draft.reply = await polishReplyWithLlm(draft.reply, org.brandVoice, input.messageBody);
+    draft.reply = await polishReplyWithLlm(
+      draft.reply,
+      org.brandVoice,
+      input.messageBody,
+      historyText
+    );
   } else if (route.intent === "sales_lead" || route.intent === "availability") {
     const sales = draftNewClientReply({
-      message: input.messageBody,
+      message: contextQuery,
       brandVoice: org.brandVoice,
       tours,
       chunks,
     });
-    sales.reply = await polishReplyWithLlm(sales.reply, org.brandVoice, input.messageBody);
+    sales.reply = await polishReplyWithLlm(
+      sales.reply,
+      org.brandVoice,
+      input.messageBody,
+      historyText
+    );
     draft = sales;
     lead = sales.lead as unknown as Record<string, unknown>;
     const conversation = await repo.getConversation(input.conversationId);
@@ -81,9 +153,15 @@ export async function processInquiry(input: PipelineInput): Promise<PipelineResu
     });
   } else {
     draft = {
-      reply: `Thanks for reaching out. I've flagged this for our team (${route.intent.replaceAll("_", " ")}). We'll get back to you shortly.`,
+      reply:
+        route.intent === "refund" || route.intent === "complaint"
+          ? `Thanks for reaching out. I've flagged this for our team (${route.intent.replaceAll("_", " ")}). Someone will follow up with you here shortly.`
+          : `Thanks for your message — happy to help with tours, availability, meeting points, or a custom itinerary. What are you looking for?`,
       confidence: route.confidence,
-      citations: [],
+      citations: tours.slice(0, 1).map((t) => ({
+        source: t.name,
+        excerpt: t.description ?? t.name,
+      })),
       retrievedChunkIds: [],
       reasoning: route.reasoning,
     };
@@ -108,16 +186,26 @@ export async function processInquiry(input: PipelineInput): Promise<PipelineResu
     reasoning: `${route.reasoning} | ${draft.reasoning} | ${decision.reason}`,
   });
 
-  if (decision.action === "auto_reply" && draft.reply) {
+  // Always keep a customer-facing reply so WhatsApp can stay conversational.
+  const customerReply = draft.reply;
+
+  if (customerReply) {
     await repo.createMessage({
       orgId: input.orgId,
       conversationId: input.conversationId,
       direction: "outbound",
       sender: "agent",
-      body: draft.reply,
-      metadata: { agentRunId: run.id, intent: route.intent, lead },
+      body: customerReply,
+      metadata: {
+        agentRunId: run.id,
+        intent: route.intent,
+        lead,
+        action: decision.action,
+      },
     });
+  }
 
+  if (decision.action === "auto_reply" && customerReply) {
     await repo.updateInquiry(inquiry.id, {
       status: "auto_resolved",
       resolvedAt: new Date(),
@@ -127,7 +215,7 @@ export async function processInquiry(input: PipelineInput): Promise<PipelineResu
       inquiryId: inquiry.id,
       intent: route.intent,
       action: "auto_reply",
-      reply: draft.reply,
+      reply: customerReply,
       confidence: decision.confidence,
       agentRunId: run.id,
       lead,
@@ -158,7 +246,7 @@ export async function processInquiry(input: PipelineInput): Promise<PipelineResu
     inquiryId: inquiry.id,
     intent: route.intent,
     action: "escalate",
-    reply: null,
+    reply: customerReply,
     confidence: decision.confidence,
     escalationId: escalation.id,
     agentRunId: run.id,

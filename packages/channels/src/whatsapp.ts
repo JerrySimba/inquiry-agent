@@ -75,14 +75,39 @@ export function extractWhatsAppPhoneNumberId(payload: unknown): string | null {
   );
 }
 
+/** WhatsApp Cloud API expects digits-only international numbers (no +). */
+export function normalizeWhatsAppTo(to: string): string {
+  return to.replace(/\D/g, "");
+}
+
+export function toWhatsAppPlainText(body: string): string {
+  return body
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/__(.*?)__/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .trim();
+}
+
 export async function sendWhatsAppText(input: {
   accessToken: string;
   phoneNumberId: string;
   to: string;
   body: string;
+  allowDemo?: boolean;
 }): Promise<{ ok: boolean; id?: string; error?: string }> {
   if (!input.accessToken || !input.phoneNumberId) {
-    return { ok: true, id: `demo-wa-${Date.now()}` };
+    if (input.allowDemo) {
+      return { ok: true, id: `demo-wa-${Date.now()}` };
+    }
+    return {
+      ok: false,
+      error: "WhatsApp access token or phone number ID missing",
+    };
+  }
+
+  const to = normalizeWhatsAppTo(input.to);
+  if (!to) {
+    return { ok: false, error: "WhatsApp recipient number missing" };
   }
 
   const res = await fetch(
@@ -95,9 +120,9 @@ export async function sendWhatsAppText(input: {
       },
       body: JSON.stringify({
         messaging_product: "whatsapp",
-        to: input.to,
+        to,
         type: "text",
-        text: { body: input.body },
+        text: { body: toWhatsAppPlainText(input.body) },
       }),
     }
   );
