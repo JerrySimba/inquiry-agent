@@ -186,24 +186,8 @@ export async function processInquiry(input: PipelineInput): Promise<PipelineResu
     reasoning: `${route.reasoning} | ${draft.reasoning} | ${decision.reason}`,
   });
 
-  // Always keep a customer-facing reply so WhatsApp can stay conversational.
+  // Customer-facing reply is persisted by ingest after the channel send attempt.
   const customerReply = draft.reply;
-
-  if (customerReply) {
-    await repo.createMessage({
-      orgId: input.orgId,
-      conversationId: input.conversationId,
-      direction: "outbound",
-      sender: "agent",
-      body: customerReply,
-      metadata: {
-        agentRunId: run.id,
-        intent: route.intent,
-        lead,
-        action: decision.action,
-      },
-    });
-  }
 
   if (decision.action === "auto_reply" && customerReply) {
     await repo.updateInquiry(inquiry.id, {

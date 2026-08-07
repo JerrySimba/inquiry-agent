@@ -6,7 +6,14 @@ import { useMemo, useState } from "react";
 export function WhatsAppConnectForm({
   initial,
 }: {
-  initial?: { phoneNumberId?: string; businessAccountId?: string };
+  initial?: {
+    phoneNumberId?: string;
+    businessAccountId?: string;
+    lastSendOk?: string;
+    lastSendError?: string;
+    lastSendAt?: string;
+    connected?: boolean;
+  };
 }) {
   const router = useRouter();
   const [phoneNumberId, setPhoneNumberId] = useState(initial?.phoneNumberId ?? "");
@@ -15,12 +22,14 @@ export function WhatsAppConnectForm({
     initial?.businessAccountId ?? ""
   );
   const [verifyToken, setVerifyToken] = useState("inquiry-verify-token");
+  const [testTo, setTestTo] = useState("254794542527");
   const [status, setStatus] = useState<string | null>(null);
+  const [testStatus, setTestStatus] = useState<string | null>(null);
   const [webhook, setWebhook] = useState<string | null>(null);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setStatus("Connecting…");
+    setStatus("Validating token with Meta…");
     const res = await fetch("/api/channels/whatsapp", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -37,7 +46,35 @@ export function WhatsAppConnectForm({
       return;
     }
     setWebhook(data.channel.webhookUrl);
-    setStatus("WhatsApp connected. Paste the webhook URL + verify token in Meta Developer.");
+    setStatus(
+      "Token validated and saved. Next: click Send test WhatsApp below, then message the business number from your phone."
+    );
+    setAccessToken("");
+    router.refresh();
+  }
+
+  async function sendTest() {
+    setTestStatus("Sending test message via Meta Graph API…");
+    const res = await fetch("/api/channels/whatsapp/test-send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to: testTo }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      const expiry =
+        data.tokenProbe?.expiresAt != null
+          ? ` Token expiresAt=${data.tokenProbe.expiresAt}.`
+          : "";
+      setTestStatus(
+        `SEND FAILED: ${data.error ?? "Unknown error"}.${expiry} ${data.hint ?? ""}`
+      );
+      router.refresh();
+      return;
+    }
+    setTestStatus(
+      `SEND OK — check WhatsApp on ${testTo}. ${data.hint ?? ""}`
+    );
     router.refresh();
   }
 
@@ -45,7 +82,8 @@ export function WhatsAppConnectForm({
     <form onSubmit={onSubmit} className="panel space-y-3 p-5">
       <h2 className="font-display text-2xl">Connect WhatsApp</h2>
       <p className="text-sm text-ink/60">
-        From Meta Developer → WhatsApp → API Setup: Phone number ID + permanent token.
+        Pilot works with Meta&apos;s test number. Temporary tokens expire in ~24h — regenerate in
+        Meta → Try it out, then save here again.
       </p>
       <div>
         <label className="label">Phone number ID</label>
@@ -57,13 +95,14 @@ export function WhatsAppConnectForm({
         />
       </div>
       <div>
-        <label className="label">Access token</label>
+        <label className="label">Access token (paste fresh token)</label>
         <input
           className="input"
           type="password"
           value={accessToken}
           onChange={(e) => setAccessToken(e.target.value)}
           required
+          placeholder="Generate in Meta → Try it out"
         />
       </div>
       <div>
@@ -86,12 +125,44 @@ export function WhatsAppConnectForm({
         Save WhatsApp connection
       </button>
       {status && <p className="text-sm text-ink/70">{status}</p>}
+      {(initial?.lastSendError || initial?.lastSendOk) && (
+        <p
+          className={`text-sm ${
+            initial.lastSendOk === "true" ? "text-lagoon" : "text-coral"
+          }`}
+        >
+          Last send: {initial.lastSendOk === "true" ? "OK" : "FAILED"}
+          {initial.lastSendAt ? ` · ${new Date(initial.lastSendAt).toLocaleString()}` : ""}
+          {initial.lastSendError ? ` · ${initial.lastSendError}` : ""}
+        </p>
+      )}
       {webhook && (
         <pre className="rounded-xl bg-mist/50 p-3 text-xs whitespace-pre-wrap">
           Callback URL: {webhook}
           {"\n"}Verify token: {verifyToken}
         </pre>
       )}
+
+      <div className="border-t border-black/5 pt-3 space-y-3">
+        <h3 className="font-medium">Prove outbound works</h3>
+        <p className="text-sm text-ink/60">
+          This bypasses the agent and calls Meta directly. If this fails, agent replies cannot
+          reach WhatsApp.
+        </p>
+        <div>
+          <label className="label">Your WhatsApp number (digits only)</label>
+          <input
+            className="input"
+            value={testTo}
+            onChange={(e) => setTestTo(e.target.value)}
+            placeholder="254794542527"
+          />
+        </div>
+        <button className="btn-secondary" type="button" onClick={sendTest}>
+          Send test WhatsApp
+        </button>
+        {testStatus && <p className="text-sm text-ink/70 whitespace-pre-wrap">{testStatus}</p>}
+      </div>
     </form>
   );
 }

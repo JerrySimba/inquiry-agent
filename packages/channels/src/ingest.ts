@@ -52,7 +52,6 @@ export async function ingestInbound(inbound: NormalizedInbound) {
     | { ok: boolean; id?: string; error?: string }
     | undefined;
 
-  // Send a reply for both auto-handled and escalated chats so WhatsApp stays conversational.
   if (result.reply) {
     outbound = await dispatchOutbound({
       orgId: inbound.orgId,
@@ -65,6 +64,40 @@ export async function ingestInbound(inbound: NormalizedInbound) {
         ? inbound.externalThreadId.replace(/^gmail:/, "")
         : undefined,
     });
+
+    await repo.createMessage({
+      orgId: inbound.orgId,
+      conversationId: conversation.id,
+      direction: "outbound",
+      sender: "agent",
+      body: result.reply,
+      externalId: outbound?.id,
+      metadata: {
+        agentRunId: result.agentRunId,
+        intent: result.intent,
+        lead: result.lead,
+        action: result.action,
+        sendOk: outbound?.ok ?? false,
+        sendError: outbound?.error ?? null,
+        channel: inbound.channel,
+      },
+    });
+
+    // Persist last send error on the WhatsApp channel for the Channels UI.
+    if (inbound.channel === "whatsapp" && inbound.channelAccountId) {
+      const account = await repo.getChannelById(inbound.channelAccountId);
+      if (account) {
+        const config = (account.config ?? {}) as Record<string, string>;
+        await repo.updateChannel(account.id, {
+          config: {
+            ...config,
+            lastSendOk: outbound?.ok ? "true" : "false",
+            lastSendError: outbound?.error ?? "",
+            lastSendAt: new Date().toISOString(),
+          },
+        });
+      }
+    }
   }
 
   return { conversation, inboundMessage, result, outbound };
@@ -85,19 +118,21 @@ export async function dispatchOutbound(input: {
 
   if (input.channel === "whatsapp") {
     const config = (account?.config ?? {}) as Record<string, string>;
+    const accessToken =
+      (config.accessToken || process.env.WHATSAPP_ACCESS_TOKEN || "").trim();
+    const phoneNumberId = (
+      config.phoneNumberId ||
+      process.env.WHATSAPP_PHONE_NUMBER_ID ||
+      account?.externalId ||
+      ""
+    ).trim();
+
     return sendWhatsAppText({
-      accessToken:
-        config.accessToken ||
-        process.env.WHATSAPP_ACCESS_TOKEN ||
-        "",
-      phoneNumberId:
-        config.phoneNumberId ||
-        process.env.WHATSAPP_PHONE_NUMBER_ID ||
-        account?.externalId ||
-        "",
+      accessToken,
+      phoneNumberId,
       to: input.to,
       body: input.body,
-      allowDemo: config.mode === "demo",
+      allowDemo: config.mode === "demo" && !accessToken,
     });
   }
 

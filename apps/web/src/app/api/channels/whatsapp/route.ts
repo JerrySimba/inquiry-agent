@@ -14,7 +14,9 @@ export async function POST(req: Request) {
     label?: string;
   };
 
-  if (!body.phoneNumberId || !body.accessToken) {
+  const phoneNumberId = body.phoneNumberId?.trim();
+  const accessToken = body.accessToken?.trim();
+  if (!phoneNumberId || !accessToken) {
     return NextResponse.json(
       { error: "phoneNumberId and accessToken are required" },
       { status: 400 }
@@ -26,16 +28,42 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "WhatsApp channel row missing" }, { status: 404 });
   }
 
+  // Validate token can call Graph before saving (fail fast for pilot setup).
+  const probe = await fetch(
+    `https://graph.facebook.com/v21.0/${phoneNumberId}?fields=display_phone_number,verified_name`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  const probeData = (await probe.json()) as {
+    display_phone_number?: string;
+    error?: { message?: string; code?: number };
+  };
+  if (!probe.ok) {
+    return NextResponse.json(
+      {
+        error:
+          probeData.error?.message ??
+          "Meta rejected this token/phone number ID. Generate a fresh token in Meta Try it out, then save again.",
+      },
+      { status: 400 }
+    );
+  }
+
   const channel = await repo.updateChannel(existing.id, {
     label: body.label || "WhatsApp Business",
-    externalId: body.phoneNumberId,
+    externalId: phoneNumberId,
     connected: true,
     config: {
-      phoneNumberId: body.phoneNumberId,
-      accessToken: body.accessToken,
-      businessAccountId: body.businessAccountId ?? "",
-      verifyToken: body.verifyToken || process.env.WHATSAPP_VERIFY_TOKEN || "inquiry-verify-token",
+      phoneNumberId,
+      accessToken,
+      businessAccountId: (body.businessAccountId ?? "").trim(),
+      verifyToken:
+        body.verifyToken?.trim() ||
+        process.env.WHATSAPP_VERIFY_TOKEN ||
+        "inquiry-verify-token",
       mode: "live",
+      displayPhoneNumber: probeData.display_phone_number ?? "",
+      lastSendError: "",
+      tokenValidatedAt: new Date().toISOString(),
     },
   });
 

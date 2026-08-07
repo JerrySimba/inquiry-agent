@@ -42,6 +42,10 @@ export default async function ChannelsPage() {
           initial={{
             phoneNumberId: waConfig.phoneNumberId || String(wa?.externalId ?? ""),
             businessAccountId: waConfig.businessAccountId,
+            lastSendOk: waConfig.lastSendOk,
+            lastSendError: waConfig.lastSendError,
+            lastSendAt: waConfig.lastSendAt,
+            connected: Boolean(wa?.connected),
           }}
         />
         <Suspense fallback={<div className="panel p-5">Loading Gmail…</div>}>

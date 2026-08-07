@@ -31,10 +31,13 @@ export function SimulateForm({
       setResult(data.error ?? "Failed");
       return;
     }
+    const outbound = data.outbound
+      ? `\nWhatsApp send: ${data.outbound.ok ? "OK" : `FAILED — ${data.outbound.error}`}`
+      : "";
     setResult(
       `${data.result.action} · intent=${data.result.intent} · confidence=${Number(
         data.result.confidence
-      ).toFixed(2)}${data.result.reply ? `\n\n${data.result.reply}` : ""}`
+      ).toFixed(2)}${outbound}${data.result.reply ? `\n\n${data.result.reply}` : ""}`
     );
     router.refresh();
   }

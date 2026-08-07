@@ -111,7 +111,7 @@ export async function sendWhatsAppText(input: {
   }
 
   const res = await fetch(
-    `https://graph.facebook.com/v21.0/${input.phoneNumberId}/messages`,
+    `https://graph.facebook.com/v22.0/${input.phoneNumberId}/messages`,
     {
       method: "POST",
       headers: {
@@ -120,20 +120,35 @@ export async function sendWhatsAppText(input: {
       },
       body: JSON.stringify({
         messaging_product: "whatsapp",
+        recipient_type: "individual",
         to,
         type: "text",
-        text: { body: toWhatsAppPlainText(input.body) },
+        text: { body: toWhatsAppPlainText(input.body), preview_url: false },
       }),
     }
   );
 
   const data = (await res.json()) as {
     messages?: Array<{ id: string }>;
-    error?: { message: string };
+    error?: {
+      message?: string;
+      error_user_msg?: string;
+      code?: number;
+      error_data?: { details?: string };
+    };
   };
 
   if (!res.ok) {
-    return { ok: false, error: data.error?.message ?? "WhatsApp send failed" };
+    const err = data.error;
+    const detail = [
+      err?.error_user_msg,
+      err?.message,
+      err?.error_data?.details,
+      err?.code != null ? `code ${err.code}` : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    return { ok: false, error: detail || "WhatsApp send failed" };
   }
   return { ok: true, id: data.messages?.[0]?.id };
 }
