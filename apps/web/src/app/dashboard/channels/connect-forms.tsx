@@ -83,7 +83,7 @@ export function WhatsAppConnectForm({
       <h2 className="font-display text-2xl">Connect WhatsApp</h2>
       <p className="text-sm text-ink/60">
         Pilot works with Meta&apos;s test number. Temporary tokens expire in ~24h — regenerate in
-        Meta → Try it out, then save here again.
+        Meta → Try it out, then save here or set <code>WHATSAPP_ACCESS_TOKEN</code> in Vercel env.
       </p>
       <div>
         <label className="label">Phone number ID</label>

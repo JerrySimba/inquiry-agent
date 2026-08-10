@@ -118,11 +118,15 @@ export async function dispatchOutbound(input: {
 
   if (input.channel === "whatsapp") {
     const config = (account?.config ?? {}) as Record<string, string>;
-    const accessToken =
-      (config.accessToken || process.env.WHATSAPP_ACCESS_TOKEN || "").trim();
+    // Vercel env overrides DB so pilots can refresh tokens without re-saving in dashboard.
+    const accessToken = (
+      process.env.WHATSAPP_ACCESS_TOKEN ||
+      config.accessToken ||
+      ""
+    ).trim();
     const phoneNumberId = (
-      config.phoneNumberId ||
       process.env.WHATSAPP_PHONE_NUMBER_ID ||
+      config.phoneNumberId ||
       account?.externalId ||
       ""
     ).trim();

@@ -23,10 +23,14 @@ export async function POST(req: Request) {
   }
 
   const config = (account.config ?? {}) as Record<string, string>;
-  const accessToken = (config.accessToken || process.env.WHATSAPP_ACCESS_TOKEN || "").trim();
+  const accessToken = (
+    process.env.WHATSAPP_ACCESS_TOKEN ||
+    config.accessToken ||
+    ""
+  ).trim();
   const phoneNumberId = (
-    config.phoneNumberId ||
     process.env.WHATSAPP_PHONE_NUMBER_ID ||
+    config.phoneNumberId ||
     account.externalId ||
     ""
   ).trim();
