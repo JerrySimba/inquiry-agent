@@ -30,7 +30,7 @@ const AUTO_INTENTS: Intent[] = ["pre_trip_faq", "sales_lead", "availability"];
 function isShortFollowUp(message: string): boolean {
   const t = message.trim();
   if (t.length === 0 || t.length > 100) return false;
-  return /^(yes|yeah|yep|ok|okay|sure|please|thanks|thank you|hi|hello|hey)\b/i.test(t)
+  return /^(yes|yeah|yep|y|ok|okay|sure|please|thanks|thank you|hi|hello|hey|proceed|confirm)\b/i.test(t)
     || /^\d+\s*(adults?|kids?|children|people|pax|guests?)?\s*$/i.test(t)
     || /^(we\s+are\s+)?\d+(\s+people)?$/i.test(t)
     || /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|january|february|march|april|june|july|august|september|october|november|december)\b/i.test(
@@ -135,8 +135,11 @@ export async function processInquiry(input: PipelineInput): Promise<PipelineResu
       );
     }
   } else if (route.intent === "sales_lead" || route.intent === "availability") {
+    const inboundCount = history.filter((m) => m.direction === "inbound").length;
     const sales = draftNewClientReply({
       message: contextQuery,
+      latestMessage: input.messageBody,
+      isFollowUp: inboundCount > 1,
       brandVoice: org.brandVoice,
       tours,
       chunks,
