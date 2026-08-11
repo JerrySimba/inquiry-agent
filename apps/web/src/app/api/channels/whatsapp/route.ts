@@ -48,6 +48,15 @@ export async function POST(req: Request) {
     );
   }
 
+  // Register WABA for inbound webhooks when saving credentials.
+  const wabaId = (body.businessAccountId ?? "").trim();
+  if (wabaId) {
+    await fetch(`https://graph.facebook.com/v22.0/${wabaId}/subscribed_apps`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+  }
+
   const channel = await repo.updateChannel(existing.id, {
     label: body.label || "WhatsApp Business",
     externalId: phoneNumberId,

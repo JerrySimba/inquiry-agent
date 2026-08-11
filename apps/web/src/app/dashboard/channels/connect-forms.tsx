@@ -25,6 +25,7 @@ export function WhatsAppConnectForm({
   const [testTo, setTestTo] = useState("254794542527");
   const [status, setStatus] = useState<string | null>(null);
   const [testStatus, setTestStatus] = useState<string | null>(null);
+  const [registerStatus, setRegisterStatus] = useState<string | null>(null);
   const [webhook, setWebhook] = useState<string | null>(null);
 
   async function onSubmit(e: React.FormEvent) {
@@ -50,6 +51,19 @@ export function WhatsAppConnectForm({
       "Token validated and saved. Next: click Send test WhatsApp below, then message the business number from your phone."
     );
     setAccessToken("");
+    router.refresh();
+  }
+
+  async function registerInbound() {
+    setRegisterStatus("Registering WABA with Meta for inbound messages…");
+    const res = await fetch("/api/channels/whatsapp/register-webhook", { method: "POST" });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      setRegisterStatus(`REGISTER FAILED: ${data.error ?? data.hint ?? "Unknown error"}`);
+      router.refresh();
+      return;
+    }
+    setRegisterStatus(`REGISTER OK — ${data.hint ?? "Text the business number, then refresh Inbox."}`);
     router.refresh();
   }
 
@@ -106,11 +120,13 @@ export function WhatsAppConnectForm({
         />
       </div>
       <div>
-        <label className="label">WhatsApp Business Account ID (optional)</label>
+        <label className="label">WhatsApp Business Account ID</label>
         <input
           className="input"
           value={businessAccountId}
           onChange={(e) => setBusinessAccountId(e.target.value)}
+          placeholder="2514751728997756"
+          required
         />
       </div>
       <div>
@@ -145,22 +161,26 @@ export function WhatsAppConnectForm({
 
       <div className="border-t border-black/5 pt-3 space-y-3">
         <div className="rounded-xl border border-coral/30 bg-coral/5 p-3 text-sm text-ink/80">
-          <p className="font-medium text-coral">Real WhatsApp replies need Meta Live mode</p>
+          <p className="font-medium text-coral">App is Live — register inbound next</p>
           <p className="mt-1">
-            If test send works but your phone messages get no reply, Meta is blocking inbound
-            webhooks while the app is unpublished. Publish the app (needs a privacy policy URL).
+            If your phone texts still don&apos;t appear in Inbox, Meta hasn&apos;t linked your
+            WhatsApp Business Account to the app yet.
           </p>
           <ol className="mt-2 list-decimal space-y-1 pl-5">
             <li>
-              Meta → App settings → Basic → Privacy policy URL:{" "}
-              <code className="rounded bg-white/70 px-1 text-xs">
-                https://inquiry-agent-web-phi.vercel.app/privacy
-              </code>
+              WABA ID above must be{" "}
+              <code className="rounded bg-white/70 px-1 text-xs">2514751728997756</code>
             </li>
-            <li>Switch app mode from Development → Live</li>
-            <li>Text the business number again — agent should reply within seconds</li>
+            <li>Click <strong>Register inbound webhooks</strong> below</li>
+            <li>Text the business number from your phone → refresh Inbox</li>
           </ol>
         </div>
+        <button className="btn-primary" type="button" onClick={registerInbound}>
+          Register inbound webhooks
+        </button>
+        {registerStatus && (
+          <p className="text-sm text-ink/70 whitespace-pre-wrap">{registerStatus}</p>
+        )}
         <h3 className="font-medium">Prove outbound works</h3>
         <p className="text-sm text-ink/60">
           This bypasses the agent and calls Meta directly. If this fails, agent replies cannot
