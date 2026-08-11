@@ -144,6 +144,23 @@ export function WhatsAppConnectForm({
       )}
 
       <div className="border-t border-black/5 pt-3 space-y-3">
+        <div className="rounded-xl border border-coral/30 bg-coral/5 p-3 text-sm text-ink/80">
+          <p className="font-medium text-coral">Real WhatsApp replies need Meta Live mode</p>
+          <p className="mt-1">
+            If test send works but your phone messages get no reply, Meta is blocking inbound
+            webhooks while the app is unpublished. Publish the app (needs a privacy policy URL).
+          </p>
+          <ol className="mt-2 list-decimal space-y-1 pl-5">
+            <li>
+              Meta → App settings → Basic → Privacy policy URL:{" "}
+              <code className="rounded bg-white/70 px-1 text-xs">
+                https://inquiry-agent-web-phi.vercel.app/privacy
+              </code>
+            </li>
+            <li>Switch app mode from Development → Live</li>
+            <li>Text the business number again — agent should reply within seconds</li>
+          </ol>
+        </div>
         <h3 className="font-medium">Prove outbound works</h3>
         <p className="text-sm text-ink/60">
           This bypasses the agent and calls Meta directly. If this fails, agent replies cannot
