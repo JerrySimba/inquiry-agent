@@ -7,7 +7,9 @@ import {
 } from "@inquiry/channels";
 import { repo, seedLocalStore } from "@inquiry/db";
 
-function resolveVerifyToken(orgId?: string | null) {
+export const maxDuration = 60;
+
+function resolveVerifyToken() {
   return process.env.WHATSAPP_VERIFY_TOKEN ?? "inquiry-verify-token";
 }
 
@@ -47,24 +49,55 @@ export async function POST(req: Request) {
   }
 
   if (!account) {
+    console.error("[whatsapp webhook] No channel for phoneNumberId", phoneNumberId);
     return NextResponse.json({ error: "No WhatsApp channel configured" }, { status: 400 });
   }
 
   const results = [];
   for (const msg of texts) {
-    const ingested = await ingestInbound({
-      orgId: account.orgId,
-      channel: "whatsapp",
-      channelAccountId: account.id,
-      externalThreadId: `whatsapp:${msg.from}`,
-      customerHandle: msg.from,
-      body: msg.text?.body ?? "",
-      externalMessageId: msg.id,
-    });
-    results.push({
-      ...ingested.result,
-      outbound: ingested.outbound,
-    });
+    try {
+      const ingested = await ingestInbound({
+        orgId: account.orgId,
+        channel: "whatsapp",
+        channelAccountId: account.id,
+        externalThreadId: `whatsapp:${msg.from}`,
+        customerHandle: msg.from,
+        body: msg.text?.body ?? "",
+        externalMessageId: msg.id,
+      });
+
+      if (ingested.duplicate) {
+        results.push({ duplicate: true, messageId: msg.id });
+        continue;
+      }
+
+      if (!ingested.result) {
+        results.push({ error: "No agent result", messageId: msg.id });
+        continue;
+      }
+
+      const entry = {
+        ...ingested.result,
+        outbound: ingested.outbound,
+        messageId: msg.id,
+      };
+
+      if (ingested.outbound && !ingested.outbound.ok) {
+        console.error(
+          "[whatsapp webhook] Send failed",
+          msg.from,
+          ingested.outbound.error
+        );
+      }
+
+      results.push(entry);
+    } catch (err) {
+      console.error("[whatsapp webhook] Handler error", msg.id, err);
+      results.push({
+        error: err instanceof Error ? err.message : "Handler failed",
+        messageId: msg.id,
+      });
+    }
   }
 
   return NextResponse.json({ ok: true, processed: results.length, results });

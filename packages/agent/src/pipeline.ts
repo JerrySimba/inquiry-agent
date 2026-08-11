@@ -2,7 +2,7 @@ import { repo, type Intent } from "@inquiry/db";
 import { draftPreTripFaqReply, polishReplyWithLlm } from "./faq-agent";
 import { decidePolicy } from "./policy";
 import { findRelevantTours, retrieveKnowledge } from "./retrieve";
-import { routeIntentWithLlm } from "./router";
+import { routeIntent, routeIntentWithLlm } from "./router";
 import { draftNewClientReply } from "./sales-agent";
 
 export type PipelineInput = {
@@ -10,6 +10,8 @@ export type PipelineInput = {
   conversationId: string;
   inboundMessageId: string;
   messageBody: string;
+  /** Skip OpenAI calls — required for WhatsApp webhooks on Vercel Hobby (10s limit). */
+  fast?: boolean;
 };
 
 export type PipelineResult = {
@@ -34,7 +36,9 @@ function isShortFollowUp(message: string): boolean {
     || /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|january|february|march|april|june|july|august|september|october|november|december)\b/i.test(
       t
     )
-    || /^\d{1,2}[\/\-]\d{1,2}/.test(t);
+    || /^\d{1,2}[\/\-]\d{1,2}/.test(t)
+    || /\bfor\s+\d+\b/i.test(t)
+    || /\bsafari\b/i.test(t);
 }
 
 function priorIntentFromMessages(
@@ -65,7 +69,9 @@ export async function processInquiry(input: PipelineInput): Promise<PipelineResu
     .filter(Boolean)
     .join("\n");
 
-  let route = await routeIntentWithLlm(input.messageBody);
+  let route = input.fast
+    ? routeIntent(input.messageBody)
+    : await routeIntentWithLlm(input.messageBody);
 
   if (
     (route.intent === "other" || isShortFollowUp(input.messageBody)) &&
@@ -120,12 +126,14 @@ export async function processInquiry(input: PipelineInput): Promise<PipelineResu
       tours,
       chunks,
     });
-    draft.reply = await polishReplyWithLlm(
-      draft.reply,
-      org.brandVoice,
-      input.messageBody,
-      historyText
-    );
+    if (!input.fast) {
+      draft.reply = await polishReplyWithLlm(
+        draft.reply,
+        org.brandVoice,
+        input.messageBody,
+        historyText
+      );
+    }
   } else if (route.intent === "sales_lead" || route.intent === "availability") {
     const sales = draftNewClientReply({
       message: contextQuery,
@@ -133,12 +141,14 @@ export async function processInquiry(input: PipelineInput): Promise<PipelineResu
       tours,
       chunks,
     });
-    sales.reply = await polishReplyWithLlm(
-      sales.reply,
-      org.brandVoice,
-      input.messageBody,
-      historyText
-    );
+    if (!input.fast) {
+      sales.reply = await polishReplyWithLlm(
+        sales.reply,
+        org.brandVoice,
+        input.messageBody,
+        historyText
+      );
+    }
     draft = sales;
     lead = sales.lead as unknown as Record<string, unknown>;
     const conversation = await repo.getConversation(input.conversationId);

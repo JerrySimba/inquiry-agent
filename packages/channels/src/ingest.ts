@@ -6,6 +6,20 @@ import { sendWhatsAppText } from "./whatsapp";
 import type { NormalizedInbound } from "./types";
 
 export async function ingestInbound(inbound: NormalizedInbound) {
+  if (inbound.externalMessageId) {
+    const existing = await repo.findMessageByExternalId(inbound.externalMessageId);
+    if (existing) {
+      const conversation = await repo.getConversation(existing.conversationId);
+      return {
+        conversation,
+        inboundMessage: existing,
+        result: null,
+        outbound: undefined,
+        duplicate: true,
+      };
+    }
+  }
+
   let conversation = await repo.findConversation(
     inbound.orgId,
     inbound.channel,
@@ -46,6 +60,7 @@ export async function ingestInbound(inbound: NormalizedInbound) {
     conversationId: conversation.id,
     inboundMessageId: inboundMessage.id,
     messageBody: inbound.body,
+    fast: inbound.channel === "whatsapp",
   });
 
   let outbound:

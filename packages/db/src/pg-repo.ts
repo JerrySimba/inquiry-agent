@@ -399,6 +399,15 @@ export const pgRepo = {
       .orderBy(asc(messages.createdAt));
   },
 
+  async findMessageByExternalId(externalId: string) {
+    const [row] = await getDb()
+      .select()
+      .from(messages)
+      .where(eq(messages.externalId, externalId))
+      .limit(1);
+    return row ?? null;
+  },
+
   async createInquiry(input: {
     orgId: string;
     conversationId: string;

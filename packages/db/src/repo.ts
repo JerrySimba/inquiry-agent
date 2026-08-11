@@ -431,6 +431,11 @@ export const localRepo = {
       .map((r) => asDate<Message>(r));
   },
 
+  async findMessageByExternalId(externalId: string) {
+    const row = read().messages.find((m) => m.externalId === externalId);
+    return row ? asDate<Message>(row) : null;
+  },
+
   async createInquiry(input: {
     orgId: string;
     conversationId: string;

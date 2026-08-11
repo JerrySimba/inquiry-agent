@@ -51,6 +51,8 @@ const RULES: Array<{ intent: Intent; patterns: RegExp[]; weight: number }> = [
       /how\s+much\s+(is|for)|what(?:'s| is)\s+the\s+price/i,
       /family\s+of\s+\d+/i,
       /we\s+are\s+\d+/i,
+      /\bsafari\b/i,
+      /\bfor\s+\d+\s*(people|pax|adults?|guests?)?\b/i,
       /available\s+(tours?|trips?|packages?)/i,
     ],
   },
