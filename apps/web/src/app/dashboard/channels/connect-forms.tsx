@@ -48,7 +48,7 @@ export function WhatsAppConnectForm({
     }
     setWebhook(data.channel.webhookUrl);
     setStatus(
-      "Token validated and saved. Next: click Send test WhatsApp below, then message the business number from your phone."
+      "Token saved securely (field clears on purpose). Now click Register inbound webhooks, then text the business number."
     );
     setAccessToken("");
     router.refresh();
@@ -116,8 +116,12 @@ export function WhatsAppConnectForm({
           value={accessToken}
           onChange={(e) => setAccessToken(e.target.value)}
           required
-          placeholder="Generate in Meta → Try it out"
+          placeholder="Generate in Meta → Try it out (expires ~24h)"
         />
+        <p className="mt-1 text-xs text-ink/55">
+          After Save, this field clears but the token stays stored. If Register fails with
+          &quot;Session has expired&quot;, generate a new token in Meta and save again.
+        </p>
       </div>
       <div>
         <label className="label">WhatsApp Business Account ID</label>
