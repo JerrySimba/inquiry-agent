@@ -2,6 +2,7 @@ import { processInquiry } from "@inquiry/agent";
 import { repo } from "@inquiry/db";
 import { sendEmail } from "./email";
 import { refreshGmailAccessToken, sendGmailReply } from "./gmail";
+import { sendTwilioWhatsAppText } from "./twilio";
 import { sendWhatsAppText } from "./whatsapp";
 import type { NormalizedInbound } from "./types";
 
@@ -133,6 +134,34 @@ export async function dispatchOutbound(input: {
 
   if (input.channel === "whatsapp") {
     const config = (account?.config ?? {}) as Record<string, string>;
+    const provider = config.provider || process.env.WHATSAPP_PROVIDER || "meta";
+
+    if (provider === "twilio") {
+      const accountSid = (
+        process.env.TWILIO_ACCOUNT_SID ||
+        config.accountSid ||
+        ""
+      ).trim();
+      const authToken = (
+        process.env.TWILIO_AUTH_TOKEN ||
+        config.authToken ||
+        ""
+      ).trim();
+      const from =
+        process.env.TWILIO_WHATSAPP_FROM ||
+        config.whatsappFrom ||
+        account?.externalId ||
+        "";
+
+      return sendTwilioWhatsAppText({
+        accountSid,
+        authToken,
+        from,
+        to: input.to,
+        body: input.body,
+      });
+    }
+
     // Vercel env overrides DB so pilots can refresh tokens without re-saving in dashboard.
     const accessToken = (
       process.env.WHATSAPP_ACCESS_TOKEN ||

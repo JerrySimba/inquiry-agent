@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { repo } from "@inquiry/db";
 import { readSession } from "@/lib/auth";
-import { GmailConnectPanel, WhatsAppConnectForm } from "./connect-forms";
+import { GmailConnectPanel, WhatsAppConnectTabs } from "./connect-forms";
 import { SimulateForm } from "./simulate-form";
 
 export default async function ChannelsPage() {
@@ -12,6 +12,11 @@ export default async function ChannelsPage() {
   const email = channels.find((c) => c.type === "email");
   const waConfig = (wa?.config ?? {}) as Record<string, string>;
   const emailConfig = (email?.config ?? {}) as Record<string, string>;
+
+  const waProvider = waConfig.provider ?? "meta";
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
+    "https://inquiry-agent-web-phi.vercel.app";
 
   return (
     <div className="space-y-6">
@@ -28,7 +33,11 @@ export default async function ChannelsPage() {
           <div key={String(c.id)} className="panel p-5">
             <h2 className="font-display text-2xl">{String(c.label)}</h2>
             <p className="mt-1 text-sm text-ink/60">
-              {String(c.type)} · {String(c.externalId)}
+              {String(c.type)}
+              {c.type === "whatsapp" && waConfig.provider
+                ? ` · ${waConfig.provider === "twilio" ? "Twilio" : "Meta"}`
+                : ""}{" "}
+              · {String(c.externalId)}
             </p>
             <p className={`mt-3 text-sm ${c.connected ? "text-lagoon" : "text-coral"}`}>
               {c.connected ? "Connected" : "Not connected"}
@@ -38,14 +47,24 @@ export default async function ChannelsPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <WhatsAppConnectForm
-          initial={{
+        <WhatsAppConnectTabs
+          appUrl={appUrl}
+          metaInitial={{
             phoneNumberId: waConfig.phoneNumberId || String(wa?.externalId ?? ""),
             businessAccountId: waConfig.businessAccountId,
             lastSendOk: waConfig.lastSendOk,
             lastSendError: waConfig.lastSendError,
             lastSendAt: waConfig.lastSendAt,
-            connected: Boolean(wa?.connected),
+            connected: Boolean(wa?.connected && waProvider === "meta"),
+          }}
+          twilioInitial={{
+            accountSid: waConfig.accountSid,
+            whatsappFrom: waConfig.whatsappFrom || String(wa?.externalId ?? ""),
+            provider: waProvider,
+            connected: Boolean(wa?.connected && waProvider === "twilio"),
+            lastSendOk: waConfig.lastSendOk,
+            lastSendError: waConfig.lastSendError,
+            lastSendAt: waConfig.lastSendAt,
           }}
         />
         <Suspense fallback={<div className="panel p-5">Loading Gmail…</div>}>
@@ -55,10 +74,7 @@ export default async function ChannelsPage() {
               process.env.GOOGLE_CLIENT_ID?.trim() &&
                 process.env.GOOGLE_CLIENT_SECRET?.trim()
             )}
-            appUrl={
-              process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
-              "https://inquiry-agent-web-phi.vercel.app"
-            }
+            appUrl={appUrl}
           />
         </Suspense>
       </div>

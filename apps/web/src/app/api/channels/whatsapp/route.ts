@@ -70,6 +70,7 @@ export async function POST(req: Request) {
         process.env.WHATSAPP_VERIFY_TOKEN ||
         "inquiry-verify-token",
       mode: "live",
+      provider: "meta",
       displayPhoneNumber: probeData.display_phone_number ?? "",
       lastSendError: "",
       tokenValidatedAt: new Date().toISOString(),

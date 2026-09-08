@@ -3,6 +3,202 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
+export function WhatsAppConnectTabs({
+  appUrl,
+  metaInitial,
+  twilioInitial,
+}: {
+  appUrl: string;
+  metaInitial?: Parameters<typeof WhatsAppConnectForm>[0]["initial"];
+  twilioInitial?: Parameters<typeof TwilioConnectForm>[0]["initial"];
+}) {
+  const defaultTab =
+    twilioInitial?.provider === "twilio" || twilioInitial?.connected
+      ? "twilio"
+      : metaInitial?.connected
+        ? "meta"
+        : "twilio";
+
+  const [tab, setTab] = useState<"twilio" | "meta">(defaultTab);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-2">
+        <button
+          type="button"
+          className={`rounded-full px-4 py-2 text-sm font-medium ${
+            tab === "twilio" ? "bg-lagoon text-white" : "bg-mist/60 text-ink/70"
+          }`}
+          onClick={() => setTab("twilio")}
+        >
+          Twilio (recommended)
+        </button>
+        <button
+          type="button"
+          className={`rounded-full px-4 py-2 text-sm font-medium ${
+            tab === "meta" ? "bg-lagoon text-white" : "bg-mist/60 text-ink/70"
+          }`}
+          onClick={() => setTab("meta")}
+        >
+          Meta Cloud API
+        </button>
+      </div>
+      {tab === "twilio" ? (
+        <TwilioConnectForm initial={twilioInitial} appUrl={appUrl} />
+      ) : (
+        <WhatsAppConnectForm initial={metaInitial} />
+      )}
+    </div>
+  );
+}
+
+export function TwilioConnectForm({
+  appUrl,
+  initial,
+}: {
+  appUrl: string;
+  initial?: {
+    accountSid?: string;
+    whatsappFrom?: string;
+    provider?: string;
+    connected?: boolean;
+    lastSendOk?: string;
+    lastSendError?: string;
+    lastSendAt?: string;
+  };
+}) {
+  const router = useRouter();
+  const webhookUrl = `${appUrl.replace(/\/$/, "")}/api/webhooks/twilio-whatsapp`;
+  const [accountSid, setAccountSid] = useState(initial?.accountSid ?? "");
+  const [authToken, setAuthToken] = useState("");
+  const [whatsappFrom, setWhatsappFrom] = useState(initial?.whatsappFrom ?? "");
+  const [testTo, setTestTo] = useState("254794542527");
+  const [status, setStatus] = useState<string | null>(null);
+  const [testStatus, setTestStatus] = useState<string | null>(null);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setStatus("Validating Twilio credentials…");
+    const res = await fetch("/api/channels/twilio", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accountSid, authToken, whatsappFrom }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setStatus(data.error ?? "Failed");
+      return;
+    }
+    setStatus("Twilio saved. Set the webhook URL in Twilio Console, then send a test message.");
+    setAuthToken("");
+    router.refresh();
+  }
+
+  async function sendTest() {
+    setTestStatus("Sending test message via Twilio…");
+    const res = await fetch("/api/channels/twilio/test-send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to: testTo }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      setTestStatus(`SEND FAILED: ${data.error ?? "Unknown error"}. ${data.hint ?? ""}`);
+      router.refresh();
+      return;
+    }
+    setTestStatus(`SEND OK — check WhatsApp on ${testTo}. ${data.hint ?? ""}`);
+    router.refresh();
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="panel space-y-3 p-5">
+      <h2 className="font-display text-2xl">Connect WhatsApp via Twilio</h2>
+      <p className="text-sm text-ink/60">
+        Simpler than Meta direct — permanent credentials, one webhook URL, sandbox for testing.
+      </p>
+      <div>
+        <label className="label">Account SID</label>
+        <input
+          className="input"
+          value={accountSid}
+          onChange={(e) => setAccountSid(e.target.value)}
+          placeholder="ACxxxxxxxx"
+          required
+        />
+      </div>
+      <div>
+        <label className="label">Auth Token</label>
+        <input
+          className="input"
+          type="password"
+          value={authToken}
+          onChange={(e) => setAuthToken(e.target.value)}
+          required
+          placeholder="From Twilio Console dashboard"
+        />
+        <p className="mt-1 text-xs text-ink/55">Field clears after save; token stays stored.</p>
+      </div>
+      <div>
+        <label className="label">WhatsApp From number</label>
+        <input
+          className="input"
+          value={whatsappFrom}
+          onChange={(e) => setWhatsappFrom(e.target.value)}
+          placeholder="+14155238886 (sandbox or your Twilio WhatsApp number)"
+          required
+        />
+      </div>
+      <button className="btn-primary" type="submit">
+        Save Twilio connection
+      </button>
+      {status && <p className="text-sm text-ink/70">{status}</p>}
+      {(initial?.lastSendError || initial?.lastSendOk) && (
+        <p
+          className={`text-sm ${
+            initial.lastSendOk === "true" ? "text-lagoon" : "text-coral"
+          }`}
+        >
+          Last send: {initial.lastSendOk === "true" ? "OK" : "FAILED"}
+          {initial.lastSendAt ? ` · ${new Date(initial.lastSendAt).toLocaleString()}` : ""}
+          {initial.lastSendError ? ` · ${initial.lastSendError}` : ""}
+        </p>
+      )}
+
+      <div className="rounded-xl bg-mist/50 p-3 text-xs whitespace-pre-wrap">
+        Twilio inbound webhook (HTTP POST):{"\n"}
+        {webhookUrl}
+      </div>
+
+      <ol className="list-decimal space-y-1 pl-5 text-sm text-ink/70">
+        <li>
+          Twilio Console → Messaging → Try it out → Send a WhatsApp message → Sandbox settings
+        </li>
+        <li>Paste the webhook URL above as &quot;When a message comes in&quot;</li>
+        <li>Join sandbox from your phone (send the join code Twilio shows you)</li>
+        <li>Click Send test WhatsApp below, then reply from your phone</li>
+      </ol>
+
+      <div className="border-t border-black/5 pt-3 space-y-3">
+        <h3 className="font-medium">Prove outbound works</h3>
+        <div>
+          <label className="label">Your WhatsApp number (digits only)</label>
+          <input
+            className="input"
+            value={testTo}
+            onChange={(e) => setTestTo(e.target.value)}
+            placeholder="254794542527"
+          />
+        </div>
+        <button className="btn-secondary" type="button" onClick={sendTest}>
+          Send test WhatsApp
+        </button>
+        {testStatus && <p className="text-sm text-ink/70 whitespace-pre-wrap">{testStatus}</p>}
+      </div>
+    </form>
+  );
+}
+
 export function WhatsAppConnectForm({
   initial,
 }: {
